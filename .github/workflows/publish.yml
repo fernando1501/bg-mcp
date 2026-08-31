@@ -33,6 +33,17 @@ jobs:
       - name: Verificar que las versiones coincidan
         run: node scripts/check-version.mjs
 
+      # Fallar aquí con un mensaje claro es mejor que un 403 de npm al final,
+      # después de haber corrido todo lo demás.
+      - name: Comprobar que la versión no esté publicada
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "bg-mcp@$version" version > /dev/null 2>&1; then
+            echo "bg-mcp@$version ya está en npm. Sube la versión con 'npm version patch' y empuja el tag." >&2
+            exit 1
+          fi
+          echo "bg-mcp@$version todavía no está publicado."
+
       # prepublishOnly compila y genera el npm-shrinkwrap.json del tarball.
       - run: npm publish --access public
         env:

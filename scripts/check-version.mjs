@@ -11,8 +11,14 @@ import { readFileSync } from 'node:fs';
 import { MANIFESTS, packageVersion } from './manifests.mjs';
 
 const pkg = packageVersion();
+
+// GITHUB_REF_NAME es el nombre del ref, no necesariamente un tag: en un
+// workflow_dispatch sobre una rama vale `main`. Solo hay tag que comparar
+// cuando el disparo vino de uno.
 const ref = process.env.GITHUB_REF_NAME ?? '';
-const tag = ref.replace(/^v/, '');
+const isTag =
+    process.env.GITHUB_REF_TYPE === 'tag' || (process.env.GITHUB_REF ?? '').startsWith('refs/tags/');
+const tag = isTag ? ref.replace(/^v/, '') : '';
 
 const problems = [];
 
