@@ -89,9 +89,14 @@ export function cookieHeader(state: StorageState): string {
 }
 
 /**
- * True when the stored cookies look usable. This is a cheap local check — BG
- * can still have invalidated the session server-side, which surfaces as a
- * SESSION_EXPIRED error on the next call.
+ * True when the stored cookies are worth *trying*. Deliberately cheap and
+ * deliberately optimistic: BG's session cookie carries `expires === -1`, so
+ * locally it never looks stale no matter how old the file is. Only the bank can
+ * say whether a session still works.
+ *
+ * Because of that, never report this to the user as "logged in" — a tool that
+ * does is claiming something it cannot know. `bg_session_status` makes a real
+ * request instead.
  */
 export function looksAuthenticated(session: SessionRecord | null): session is SessionRecord {
     if (!session) return false;

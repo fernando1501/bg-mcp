@@ -48,9 +48,11 @@ async function main(): Promise<void> {
             instructions:
                 'Read-only access to the user\'s Banco General accounts. This server can ONLY read: it cannot ' +
                 'transfer money, pay bills, or change anything in the account.\n\n' +
-                'Start with bg_session_status. If not authenticated, ask the user for their username, call ' +
-                'bg_login_start, relay the security question it returns, then call bg_login_answer with the ' +
-                'answer and password.\n\n' +
+                'Start with bg_session_status. If it reports authenticated: false, stop and log the user in ' +
+                'before answering anything about their money: ask for their username, call bg_login_start, relay ' +
+                'the security question it returns, then call bg_login_answer with the answer and password. ' +
+                'Never present balances, totals or "no results" from an unauthenticated session as facts about ' +
+                'the user\'s finances — say the login is needed instead.\n\n' +
                 'Then call bg_list_accounts to get the portalIds every other tool needs. All dates are Panama ' +
                 'local time (UTC-5). Balances reflect BG\'s lastSyncDate, not the live moment.',
         },

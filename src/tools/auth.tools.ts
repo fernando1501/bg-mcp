@@ -13,7 +13,7 @@ import { startLogin, submitOtp, submitSecurityAnswer } from '../auth/login.js';
 import { deleteCredentials } from '../auth/keychain.js';
 import { discardAll } from '../auth/pending.js';
 import { clearSession, loadSession, looksAuthenticated } from '../auth/session.js';
-import { bank } from '../http/client.js';
+import { bank, SessionExpiredError } from '../http/client.js';
 import { guarded, jsonResult } from './helpers.js';
 
 export function registerAuthTools(server: McpServer): void {
@@ -110,7 +110,10 @@ export function registerAuthTools(server: McpServer): void {
             title: 'Check session status',
             description:
                 'Reports whether there is a usable Banco General session, who it belongs to, and how fresh it is. ' +
-                'Call this before asking the user for credentials — they may already be logged in.',
+                'Verifies against the bank rather than trusting the stored session file. ' +
+                'Call this before asking the user for credentials — they may already be logged in. ' +
+                'If it reports authenticated: false, log in before answering anything about the accounts; ' +
+                'the data tools have nothing to read and will fail.',
             inputSchema: {},
         },
         guarded(async () => {
@@ -118,14 +121,40 @@ export function registerAuthTools(server: McpServer): void {
             if (!looksAuthenticated(session)) {
                 return jsonResult({
                     authenticated: false,
-                    nextStep: 'Ask the user for their username and call bg_login_start.',
+                    reason: session ? 'stored_session_unusable' : 'no_session',
+                    nextStep:
+                        'Ask the user for their username and call bg_login_start. Do not report balances or ' +
+                        'spending until the login completes.',
                 });
             }
+
+            // The stored cookies can look perfectly fine here and still be dead:
+            // BG's session cookie carries no expiry, so the file alone can never
+            // say. Only the bank knows, so ask it — reporting a stale session as
+            // live is what makes every later tool answer with empty data instead
+            // of asking the user to log in.
+            try {
+                await bank.get('/o/api/dashboard/tour');
+            } catch (err) {
+                if (err instanceof SessionExpiredError) {
+                    return jsonResult({
+                        authenticated: false,
+                        reason: 'expired',
+                        username: session.username,
+                        nextStep:
+                            'The stored session is no longer valid. Ask the user for their credentials and call ' +
+                            'bg_login_start. Do not report balances or spending until the login completes.',
+                    });
+                }
+                throw err;
+            }
+
+            bank.persistFreshness();
             return jsonResult({
                 authenticated: true,
                 username: session.username,
                 loggedInAt: new Date(session.loggedInAt).toISOString(),
-                lastVerifiedAt: new Date(session.lastVerifiedAt).toISOString(),
+                verifiedAt: new Date().toISOString(),
                 credentialsRemembered: session.remembered,
             });
         }),
