@@ -2,7 +2,12 @@
 
 import { BASE } from '../config.js';
 import { bank, SessionExpiredError } from '../http/client.js';
-import { flattenAccounts, type Account } from './normalize.js';
+import {
+    flattenAccounts,
+    toLocalDate,
+    type Account,
+    type PendingPurchase,
+} from './normalize.js';
 
 export async function listAccounts(): Promise<Account[]> {
     const groups = await bank.get<unknown>('/o/api/dashboard/product');
@@ -50,10 +55,72 @@ export async function getAssociatedAccountCards(portalId: number): Promise<unkno
     );
 }
 
-/** Transactions BG has accepted but not yet posted to the balance. */
+/** Charges already taken out of the available balance but not yet posted as movements. */
 export async function getTransitTransactions(portalId: number): Promise<unknown> {
     return bank.get(
         `/o/api/product-info/saving-account/trx-transit/${portalId}`,
         savingsReferer(portalId),
     );
+}
+
+/**
+ * BG's shape for `trx-transit`. Charges are grouped by the debit card that made
+ * them, so the movements are two levels down.
+ */
+interface RawTransitResponse {
+    totalAccountMovement?: number;
+    associatedCreditCardMovement?: Array<{
+        card?: { idCard?: { maskCardNumber?: string } };
+        movement?: Array<{
+            id?: string | number;
+            dateMovement?: number;
+            amountMovement?: number;
+            commerce?: { description?: string };
+            authCode?: string;
+        }>;
+    }>;
+}
+
+/** Flattens `trx-transit` into Transaction-shaped rows the other tools can merge. */
+export function normalizePendingPurchases(
+    raw: unknown,
+    account: { portalId: number; alias: string; maskedNumber: string },
+): PendingPurchase[] {
+    const response = (raw ?? {}) as RawTransitResponse;
+    const out: PendingPurchase[] = [];
+
+    for (const group of response.associatedCreditCardMovement ?? []) {
+        const card = group.card?.idCard?.maskCardNumber ?? '';
+        for (const movement of group.movement ?? []) {
+            out.push({
+                id: String(movement.id ?? ''),
+                date: toLocalDate(movement.dateMovement),
+                timestamp: movement.dateMovement ?? 0,
+                account: account.alias || account.maskedNumber,
+                accountPortalId: account.portalId,
+                description: (movement.commerce?.description ?? '').trim(),
+                amount: movement.amountMovement ?? 0,
+                // Everything in transit is an authorized purchase, and BG sends
+                // no nature field for these — there is nothing to derive it from.
+                nature: 'D',
+                type: 'Gasto',
+                balanceAfter: null,
+                source: 'pending',
+                posted: false,
+                card,
+                authCode: movement.authCode ?? '',
+            });
+        }
+    }
+
+    return out;
+}
+
+/** Pending purchases for one savings account, normalized. */
+export async function getPendingPurchases(account: {
+    portalId: number;
+    alias: string;
+    maskedNumber: string;
+}): Promise<PendingPurchase[]> {
+    return normalizePendingPurchases(await getTransitTransactions(account.portalId), account);
 }

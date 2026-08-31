@@ -42,7 +42,26 @@ export interface Transaction {
     type: 'Ingreso' | 'Gasto' | '';
     /** Running balance after this movement, when BG provides it. */
     balanceAfter: number | null;
-    source: 'savings' | 'credit-card';
+    source: 'savings' | 'credit-card' | 'pending';
+}
+
+/**
+ * A charge the bank has authorized but not yet posted — the "Compras en proceso"
+ * block above the movement list in the BG web app.
+ *
+ * The money is already gone: BG has it deducted from the account's *available*
+ * balance. What hasn't happened is the posting, so the charge is absent from the
+ * movement list and from every total derived from it, and it will show up again
+ * as a normal movement once it posts. Hence `posted: false` rather than
+ * something that reads like "not real yet" — it is very real, just not booked.
+ */
+export interface PendingPurchase extends Transaction {
+    source: 'pending';
+    posted: false;
+    /** Masked number of the debit card the charge was made with. */
+    card: string;
+    /** BG's authorization code, the only stable handle before it posts. */
+    authCode: string;
 }
 
 /** Renders a UTC epoch as a Panama-local YYYY-MM-DD. */

@@ -3,7 +3,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { findAccount, getTransitTransactions } from '../api/accounts.js';
+import { findAccount, getPendingPurchases } from '../api/accounts.js';
 import { getCardMovements, normalizeCardMovements } from '../api/cards.js';
 import { clampToDateRange, parseLocalDate } from '../api/normalize.js';
 import { getSavingsMovements, normalizeSavingsMovements } from '../api/savings.js';
@@ -22,8 +22,8 @@ export function registerTransactionTools(server: McpServer): void {
             description:
                 'Transactions for one savings account over a date range, with pagination handled internally. ' +
                 'Dates are Panama local time. Also returns pending purchases ("Compras en proceso") — accepted ' +
-                'but not yet posted, and reported separately because they are in neither the totals nor the ' +
-                'balance. For credit-card charges use bg_list_card_transactions instead.',
+                'but not yet posted. They are already out of the available balance, and are reported separately ' +
+                'because they are not movements yet. For credit-card charges use bg_list_card_transactions.',
             inputSchema: {
                 portalId: z.number().int().describe('Savings account portalId from bg_list_accounts.'),
                 fromDate: isoDate,
@@ -104,7 +104,7 @@ export function registerTransactionTools(server: McpServer): void {
                 let pendingPurchasesError: string | undefined;
                 if (includePending !== false) {
                     try {
-                        pendingPurchases = await getTransitTransactions(portalId);
+                        pendingPurchases = await getPendingPurchases(account);
                     } catch (err) {
                         pendingPurchasesError = err instanceof Error ? err.message : String(err);
                     }
@@ -125,8 +125,9 @@ export function registerTransactionTools(server: McpServer): void {
                     pendingPurchases,
                     pendingPurchasesError,
                     pendingPurchasesNote:
-                        'Compras en proceso: accepted by the bank, not yet posted. Not included in totals, in ' +
-                        'transactions, or in the account balance.',
+                        'Compras en proceso: the money is already deducted from the available balance, but the ' +
+                        'charge has not posted, so it is not in `transactions` or in `totals` and will appear ' +
+                        'there as a normal movement once it posts. Treat it as spent.',
                 });
             },
         ),

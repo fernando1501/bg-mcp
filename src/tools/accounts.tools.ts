@@ -6,8 +6,8 @@ import { z } from 'zod';
 import {
     findAccount,
     getAssociatedAccountCards,
+    getPendingPurchases,
     getSavingsAccountDetail,
-    getTransitTransactions,
     listAccounts,
 } from '../api/accounts.js';
 import { getCardState } from '../api/cards.js';
@@ -86,7 +86,7 @@ export function registerAccountTools(server: McpServer): void {
             let pendingPurchasesError: string | undefined;
             if (includeTransit !== false) {
                 try {
-                    pendingPurchases = await getTransitTransactions(portalId);
+                    pendingPurchases = await getPendingPurchases(account);
                 } catch (err) {
                     pendingPurchasesError = err instanceof Error ? err.message : String(err);
                 }
@@ -97,7 +97,7 @@ export function registerAccountTools(server: McpServer): void {
                 detail,
                 associatedCards: cards,
                 // "Compras en proceso" in the BG web app: accepted, not yet
-                // posted, and therefore not reflected in currentBalance.
+                // posted. Already out of the available balance, not yet a movement.
                 pendingPurchases,
                 pendingPurchasesError,
             });

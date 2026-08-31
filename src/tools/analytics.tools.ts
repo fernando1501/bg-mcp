@@ -9,13 +9,14 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { listAccounts } from '../api/accounts.js';
+import { getPendingPurchases, listAccounts } from '../api/accounts.js';
 import { getCardMovements, normalizeCardMovements } from '../api/cards.js';
 import {
     clampToDateRange,
     monthRange,
     parseLocalDate,
     type Account,
+    type PendingPurchase,
     type Transaction,
 } from '../api/normalize.js';
 import { getSavingsMovements, normalizeSavingsMovements } from '../api/savings.js';
@@ -29,10 +30,17 @@ import { guarded, jsonResult, limited } from './helpers.js';
 async function collectAll(
     fromDate: string,
     toDate: string,
-): Promise<{ transactions: Transaction[]; accounts: Account[]; errors: string[] }> {
+    options: { includePending?: boolean } = {},
+): Promise<{
+    transactions: Transaction[];
+    pending: PendingPurchase[];
+    accounts: Account[];
+    errors: string[];
+}> {
     const accounts = await listAccounts();
     const errors: string[] = [];
     const transactions: Transaction[] = [];
+    const pending: PendingPurchase[] = [];
 
     const savings = accounts.filter((a) => a.classType === 'SavingsAccount');
     const cards = accounts.filter((a) => a.classType === 'CreditCard');
@@ -46,6 +54,20 @@ async function collectAll(
             transactions.push(...normalizeSavingsMovements(raw, account));
         } catch (err) {
             errors.push(`${account.alias}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+
+        // Kept in their own bucket rather than pushed onto `transactions`: they
+        // are not posted, so they must not reach a spending total, but a search
+        // that can't see them is useless for the question people actually ask —
+        // "did that charge go through?".
+        if (options.includePending) {
+            try {
+                pending.push(...(await getPendingPurchases(account)));
+            } catch (err) {
+                errors.push(
+                    `${account.alias} (compras en proceso): ${err instanceof Error ? err.message : String(err)}`,
+                );
+            }
         }
     }
 
@@ -73,7 +95,12 @@ async function collectAll(
         return true;
     });
 
-    return { transactions: clampToDateRange(deduped, fromDate, toDate), accounts, errors };
+    return {
+        transactions: clampToDateRange(deduped, fromDate, toDate),
+        pending: clampToDateRange(pending, fromDate, toDate) as PendingPurchase[],
+        accounts,
+        errors,
+    };
 }
 
 function monthsBetween(fromDate: string, toDate: string): Array<{ month: number; year: number }> {
@@ -106,7 +133,9 @@ export function registerAnalyticsTools(server: McpServer): void {
             description:
                 'Searches every savings account and credit card at once over a date range, optionally filtering ' +
                 'by description text and amount. Use this for questions like "how much did I spend at X" or ' +
-                '"find that $250 charge in March" — it saves calling the per-account tools one by one.',
+                '"find that $250 charge in March" — it saves calling the per-account tools one by one. ' +
+                'Covers pending purchases ("Compras en proceso") as well as posted movements, so a charge made ' +
+                'today is findable; those come back with source "pending".',
             inputSchema: {
                 fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Start date, YYYY-MM-DD (Panama time).'),
                 toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('End date, YYYY-MM-DD (Panama time).'),
@@ -141,16 +170,23 @@ export function registerAnalyticsTools(server: McpServer): void {
                 type?: 'Ingreso' | 'Gasto';
                 limit?: number;
             }) => {
-                const { transactions, errors } = await collectAll(fromDate, toDate);
+                const { transactions, pending, errors } = await collectAll(fromDate, toDate, {
+                    includePending: true,
+                });
                 const needle = query?.toLowerCase();
 
-                const matched = transactions.filter((t) => {
+                const matches = (t: Transaction): boolean => {
                     if (needle && !t.description.toLowerCase().includes(needle)) return false;
                     if (minAmount !== undefined && t.amount < minAmount) return false;
                     if (maxAmount !== undefined && t.amount > maxAmount) return false;
                     if (type && t.type !== type) return false;
                     return true;
-                });
+                };
+
+                // Pending purchases are searched alongside posted ones. The most
+                // recent charge is very often still in transit, and it is exactly
+                // the one people ask about.
+                const matched = [...transactions.filter(matches), ...pending.filter(matches)];
                 matched.sort((a, b) => a.timestamp - b.timestamp);
 
                 const { items, truncated, total } = limited(matched, limit);
@@ -161,7 +197,12 @@ export function registerAnalyticsTools(server: McpServer): void {
                     returned: items.length,
                     truncated,
                     matchedTotal: round(matched.reduce((s, t) => s + t.amount, 0)),
+                    pendingMatched: items.filter((t) => t.source === 'pending').length,
                     transactions: items,
+                    note:
+                        'Results with source "pending" are "Compras en proceso": the money is already out of the ' +
+                        'account\'s available balance, but the charge has not posted yet, so it is in no statement ' +
+                        'and will reappear as a normal movement once it does. Treat it as spent.',
                     ...(errors.length ? { partialFailures: errors } : {}),
                 });
             },
@@ -224,7 +265,9 @@ export function registerAnalyticsTools(server: McpServer): void {
                     to = to ?? isoLocal(end);
                 }
 
-                const { transactions, accounts, errors } = await collectAll(from, to);
+                const { transactions, pending, accounts, errors } = await collectAll(from, to, {
+                    includePending: true,
+                });
 
                 const income = transactions.filter((t) => t.type === 'Ingreso');
                 const expense = transactions.filter((t) => t.type === 'Gasto');
@@ -252,6 +295,16 @@ export function registerAnalyticsTools(server: McpServer): void {
                     },
                     byAccount,
                     largestExpenses: largest,
+                    // Reported next to the totals rather than inside them: these
+                    // have not posted, so adding them would double-count once
+                    // they do. But the money is already gone from the available
+                    // balance, so `expense` alone understates what was spent —
+                    // hence a real figure here instead of a footnote.
+                    pendingNotCounted: {
+                        count: pending.length,
+                        total: round(pending.reduce((s, t) => s + t.amount, 0)),
+                        purchases: pending,
+                    },
                     accountsScanned: accounts.map((a) => ({
                         portalId: a.portalId,
                         alias: a.alias,
@@ -260,7 +313,10 @@ export function registerAnalyticsTools(server: McpServer): void {
                     })),
                     note:
                         'Transfers between the user\'s own accounts appear on both sides and are NOT excluded — ' +
-                        'inspect descriptions (e.g. "ENTRE CUENTAS") before treating these totals as net cash flow.',
+                        'inspect descriptions (e.g. "ENTRE CUENTAS") before treating these totals as net cash flow. ' +
+                        'pendingNotCounted holds charges already taken out of the available balance but not yet ' +
+                        'posted: real spending, excluded from `totals` only because it would be counted twice ' +
+                        'once it posts. Add it in when the question is "how much have I actually spent".',
                     ...(errors.length ? { partialFailures: errors } : {}),
                 });
             },

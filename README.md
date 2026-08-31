@@ -194,8 +194,8 @@ Escribe el mismo archivo de sesión que consume el servidor.
 ### Analítica
 | Tool | Qué hace |
 |---|---|
-| `bg_search_transactions` | Busca en **todas** las cuentas y tarjetas a la vez por texto, monto, tipo y fechas |
-| `bg_spending_summary` | Resumen de un mes: ingresos, gastos, neto, desglose por cuenta y mayores gastos |
+| `bg_search_transactions` | Busca en **todas** las cuentas y tarjetas a la vez por texto, monto, tipo y fechas, **incluidas las compras en proceso** |
+| `bg_spending_summary` | Resumen de un mes: ingresos, gastos, neto, desglose por cuenta y mayores gastos. Las compras en proceso van aparte, en `pendingNotCounted` |
 
 ---
 
@@ -211,6 +211,19 @@ Escribe el mismo archivo de sesión que consume el servidor.
 - **Las transferencias entre cuentas propias aparecen de los dos lados** y
   `bg_spending_summary` no las excluye. Revisa las descripciones (p. ej.
   `ENTRE CUENTAS`) antes de leer los totales como flujo de caja neto.
+- **Las "Compras en proceso" llegan con `source: "pending"` y `posted: false`.**
+  Ojo con la palabra "pendiente": **la plata ya salió del saldo disponible**, ya
+  no la tienes. Lo único que falta es que el cargo *postee* como movimiento; hasta
+  entonces no aparece en la lista de movimientos ni en los totales que se calculan
+  de ella, y cuando postee **volverá a aparecer** como movimiento normal.
+
+  Por eso quedan fuera de los totales — sumarlas contaría dos veces la misma
+  compra — pero se reportan con su monto en `pendingNotCounted`, porque son gasto
+  real y omitirlas te subestima lo gastado. Si el saldo disponible no te cuadra
+  con los movimientos, la diferencia suele ser exactamente esto.
+
+  `bg_search_transactions` sí las busca, porque la compra más reciente —la que uno
+  pregunta— casi siempre sigue en tránsito.
 
 ## Variables de entorno
 
