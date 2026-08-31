@@ -77,13 +77,14 @@ function usage(): void {
     console.log(`bg-mcp — MCP de solo lectura para Banco General
 
 Uso:
+  bg-mcp                      Arranca el servidor MCP en stdio
+  bg-mcp serve                Lo mismo, explícito
   bg-mcp login [--headless]   Inicia sesión (browser visible por defecto)
   bg-mcp status               Muestra el estado de la sesión guardada
   bg-mcp logout               Borra la sesión y las credenciales del Keychain
-  bg-mcp serve                Arranca el servidor MCP en stdio
 
-El servidor normalmente lo lanza tu cliente MCP con:
-  node <ruta>/dist/index.js`);
+Registro en el cliente MCP:
+  claude mcp add bg -- npx -y bg-mcp`);
 }
 
 async function main(): Promise<void> {
@@ -98,12 +99,19 @@ async function main(): Promise<void> {
         case 'logout':
             await cmdLogout();
             break;
+        // Sin subcomando es servidor: es como lo invoca el cliente MCP, que
+        // ejecuta el binario pelado y espera frames por stdout.
+        case undefined:
         case 'serve':
             await import('../index.js');
             break;
+        case '--help':
+        case '-h':
+            usage();
+            break;
         default:
             usage();
-            if (command) process.exitCode = 1;
+            process.exitCode = 1;
     }
 }
 

@@ -37,31 +37,62 @@ pasa el guard.
 
 ## Instalación
 
-```bash
-cd ~/personal/bg-mcp
-npm install
-npx playwright install chromium   # el login se hace manejando la UI real
-npm run build
-```
-
-## Registro en el cliente MCP
+Es un servidor **stdio**: corre local, lo lanza tu cliente MCP y hablan por
+stdin/stdout. No hay nada que desplegar, ni puerto que abrir, ni repo que clonar
+— basta con decirle al cliente qué comando ejecutar:
 
 ```bash
-claude mcp add bg --scope user -- node ~/personal/bg-mcp/dist/index.js
+claude mcp add bg --scope user -- npx -y bg-mcp
 ```
 
-O a mano, en la config de Claude Desktop:
+`npx` baja el paquete la primera vez, lo cachea y lo ejecuta. En Claude Desktop
+es el mismo comando escrito a mano:
 
 ```json
 {
   "mcpServers": {
-    "bg": { "command": "node", "args": ["/Users/TU_USUARIO/personal/bg-mcp/dist/index.js"] }
+    "bg": { "command": "npx", "args": ["-y", "bg-mcp"] }
   }
 }
 ```
 
 No hay que configurar credenciales en ningún archivo — se piden al momento de
 iniciar sesión.
+
+### El primer arranque baja Chromium
+
+El login maneja la UI real de Banco General, así que el paquete depende de
+Playwright y su postinstall descarga Chromium (~150 MB). Si eso ocurre mientras
+el cliente MCP espera el primer handshake, puede pasarse del timeout y marcar el
+servidor como caído. Conviene calentar la caché antes — y de paso quedas
+logueado:
+
+```bash
+npx -y bg-mcp login
+claude mcp add bg --scope user -- npx -y bg-mcp
+```
+
+Si el browser igual falta, Playwright lo dice explícitamente al intentar el
+login; se arregla con `npx playwright install chromium`.
+
+### Instalación global
+
+Si prefieres no depender de la caché de npx:
+
+```bash
+npm i -g bg-mcp
+claude mcp add bg --scope user -- bg-mcp
+```
+
+### Desde el código
+
+```bash
+git clone <este-repo> bg-mcp && cd bg-mcp
+npm install
+npx playwright install chromium
+npm run build
+claude mcp add bg --scope user -- node "$PWD/dist/index.js"
+```
 
 ---
 
@@ -96,9 +127,9 @@ Si el dispositivo no está registrado o BG pide OTP repetidamente, el flujo
 headless puede no completar. Para eso:
 
 ```bash
-node dist/cli/bin.js login      # abre un browser visible
-node dist/cli/bin.js status
-node dist/cli/bin.js logout
+npx -y bg-mcp login      # abre un browser visible
+npx -y bg-mcp status
+npx -y bg-mcp logout
 ```
 
 Escribe el mismo archivo de sesión que consume el servidor.
@@ -160,8 +191,3 @@ npm run build      # compila a dist/
 npm test           # guard + normalización (sin red)
 npm run inspect    # MCP Inspector contra el servidor compilado
 ```
-
-Este servidor nació de la automatización de presupuesto en
-`~/personal/automations/automations/budget`, de donde vienen el flujo de login,
-la paginación por cursor `seqNumber` y el manejo de zona horaria — todos ya
-probados contra la API real.
