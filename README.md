@@ -111,10 +111,11 @@ Code todo plugin se instala desde un marketplace:
 /plugin install bg-mcp@bg-mcp
 ```
 
-El marketplace solo hospeda el índice; el plugin se baja de npm
-(`"source": "npm"`), así que no hay repo que clonar ni `dist/` que versionar.
-Chromium sigue siendo aparte: Claude Code instala las dependencias del plugin
-con `--ignore-scripts`, o sea el postinstall de Playwright no corre.
+El plugin vive en el propio repo (`"source": "./"`, la forma relativa que es la
+única que todos los clientes documentan como sincronizable) y su `plugin.json`
+arranca el servidor con `npx -y bg-mcp`. O sea que el repo aporta el manifiesto y
+npm aporta el código: no hay `dist/` que versionar ni dependencias que instalar
+en la caché del plugin.
 
 ### Desde el código
 
@@ -254,7 +255,7 @@ este repo y este workflow.
 
 Para publicar a mano el flujo sigue siendo `npm publish`.
 
-#### Las versiones y el lockfile
+#### Las versiones
 
 La versión vive repetida en tres archivos y ninguno la hereda de otro. El hook
 `version` de npm corre [`scripts/sync-version.mjs`](scripts/sync-version.mjs),
@@ -266,13 +267,9 @@ CI por si alguien editó a mano. La lista está en
 versión se agrega ahí. La que reporta el servidor en
 [`src/index.ts`](src/index.ts) sigue suelta, pero solo se ve en el handshake MCP.
 
-`prepublishOnly` copia `package-lock.json` a `npm-shrinkwrap.json` y
-`postpublish` lo borra. El rodeo existe porque npm excluye `package-lock.json`
-de lo que publica, y Claude Code solo le instala dependencias a un plugin si
-encuentra un lockfile **dentro del paquete**. Copiarlo al vuelo deja el repo con
-un solo lockfile en vez de dos.
-
-Efecto secundario a tener presente: un shrinkwrap publicado le fija el árbol de
-dependencias a todo el que instale el paquete, no solo a quien lo use como
-plugin. Los parches de `axios` o `playwright` le llegan a la gente cuando
-republiques, no antes.
+Hubo una versión de esto que publicaba un `npm-shrinkwrap.json` para que Claude
+Code pudiera instalarle dependencias al plugin. Ya no hace falta: el plugin
+arranca el servidor con `npx`, que resuelve el paquete y sus dependencias por su
+cuenta. Se quitó también porque un shrinkwrap publicado le fija el árbol de
+dependencias a **todo** el que instale el paquete, no solo a quien lo use como
+plugin.

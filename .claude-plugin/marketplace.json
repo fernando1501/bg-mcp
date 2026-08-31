@@ -4,14 +4,11 @@
   "owner": {
     "name": "Fernando"
   },
-  "description": "Marketplace de un solo plugin: bg-mcp, servido desde npm.",
+  "description": "Marketplace de un solo plugin: bg-mcp.",
   "plugins": [
     {
       "name": "bg-mcp",
-      "source": {
-        "source": "npm",
-        "package": "bg-mcp"
-      },
+      "source": "./",
       "displayName": "Banco General (solo lectura)",
       "description": "Servidor MCP de solo lectura para la Zona Segura de Banco General: cuentas, tarjetas, pension y analitica de gastos.",
       "homepage": "https://www.npmjs.com/package/bg-mcp",

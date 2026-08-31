@@ -17,9 +17,10 @@
   ],
   "mcpServers": {
     "bg": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/dist/index.js"
+        "-y",
+        "bg-mcp"
       ]
     }
   }

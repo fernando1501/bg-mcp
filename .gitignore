@@ -1,7 +1,6 @@
 node_modules/
 dist/
 test-dist/
-npm-shrinkwrap.json
 .env
 *.session.json
 .DS_Store
