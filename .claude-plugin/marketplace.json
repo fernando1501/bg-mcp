@@ -1,0 +1,29 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "bg-mcp",
+  "owner": {
+    "name": "Fernando"
+  },
+  "description": "Marketplace de un solo plugin: bg-mcp, servido desde npm.",
+  "plugins": [
+    {
+      "name": "bg-mcp",
+      "source": {
+        "source": "npm",
+        "package": "bg-mcp"
+      },
+      "displayName": "Banco General (solo lectura)",
+      "description": "Servidor MCP de solo lectura para la Zona Segura de Banco General: cuentas, tarjetas, pension y analitica de gastos.",
+      "homepage": "https://www.npmjs.com/package/bg-mcp",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "mcp",
+        "banco-general",
+        "banking",
+        "read-only",
+        "panama"
+      ]
+    }
+  ]
+}

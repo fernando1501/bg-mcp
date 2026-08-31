@@ -1,0 +1,26 @@
+{
+  "name": "bg-mcp",
+  "displayName": "Banco General (solo lectura)",
+  "description": "Servidor MCP de solo lectura para la Zona Segura de Banco General: cuentas, tarjetas, pension y analitica de gastos.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Fernando"
+  },
+  "homepage": "https://www.npmjs.com/package/bg-mcp",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "banco-general",
+    "banking",
+    "read-only",
+    "panama"
+  ],
+  "mcpServers": {
+    "bg": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/dist/index.js"
+      ]
+    }
+  }
+}

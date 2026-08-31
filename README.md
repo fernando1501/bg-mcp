@@ -84,6 +84,23 @@ npm i -g bg-mcp
 claude mcp add bg --scope user -- bg-mcp
 ```
 
+### Como plugin de Claude Code
+
+El paquete también trae un [`.claude-plugin/`](.claude-plugin/), por si lo
+quieres administrar como plugin (`/plugin update`, activar y desactivar) en vez
+de como servidor MCP suelto. Son dos comandos en lugar de uno, porque en Claude
+Code todo plugin se instala desde un marketplace:
+
+```
+/plugin marketplace add TU_USUARIO/bg-mcp
+/plugin install bg-mcp@bg-mcp
+```
+
+El marketplace solo hospeda el índice; el plugin se baja de npm
+(`"source": "npm"`), así que no hay repo que clonar ni `dist/` que versionar. Y
+como npm corre los lifecycle scripts al instalar, aquí Chromium se baja **en la
+instalación** y no en el primer arranque.
+
 ### Desde el código
 
 ```bash
@@ -191,3 +208,46 @@ npm run build      # compila a dist/
 npm test           # guard + normalización (sin red)
 npm run inspect    # MCP Inspector contra el servidor compilado
 ```
+
+### Publicar
+
+Publica GitHub Actions al empujar un tag de versión:
+
+```bash
+npm version patch      # sube package.json y arrastra plugin.json
+git push --follow-tags
+```
+
+El workflow ([`.github/workflows/publish.yml`](.github/workflows/publish.yml))
+corre las pruebas, verifica que `package.json`, el manifiesto del plugin y el tag
+digan la misma versión, y recién ahí publica.
+
+Necesita un secreto `NPM_TOKEN` en el repo (Settings → Secrets and variables →
+Actions). Que sea un **granular access token** de npm, limitado al paquete
+`bg-mcp` y con permiso de escritura — no un token clásico de cuenta, que puede
+publicar cualquier cosa a tu nombre. Se puede prescindir del secreto
+configurando *trusted publishing* en npmjs.com, que autentica por OIDC contra
+este repo y este workflow.
+
+Para publicar a mano el flujo sigue siendo `npm publish`.
+
+#### Las versiones y el lockfile
+
+Ninguno de los dos manifiestos hereda la versión del otro. El hook `version` de
+npm corre [`scripts/sync-version.mjs`](scripts/sync-version.mjs), que copia la
+versión nueva a [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json) y la
+deja en el mismo commit; [`scripts/check-version.mjs`](scripts/check-version.mjs)
+vuelve a comprobarlo en CI por si alguien editó a mano. La que reporta el
+servidor en [`src/index.ts`](src/index.ts) sigue suelta, pero solo se ve en el
+handshake MCP.
+
+`prepublishOnly` copia `package-lock.json` a `npm-shrinkwrap.json` y
+`postpublish` lo borra. El rodeo existe porque npm excluye `package-lock.json`
+de lo que publica, y Claude Code solo le instala dependencias a un plugin si
+encuentra un lockfile **dentro del paquete**. Copiarlo al vuelo deja el repo con
+un solo lockfile en vez de dos.
+
+Efecto secundario a tener presente: un shrinkwrap publicado le fija el árbol de
+dependencias a todo el que instale el paquete, no solo a quien lo use como
+plugin. Los parches de `axios` o `playwright` le llegan a la gente cuando
+republiques, no antes.
