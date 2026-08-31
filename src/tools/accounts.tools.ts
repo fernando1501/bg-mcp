@@ -40,16 +40,21 @@ export function registerAccountTools(server: McpServer): void {
         {
             title: 'Get account detail',
             description:
-                'Full detail for one product, dispatching on its type: savings accounts return balances and ' +
-                'associated debit cards, credit cards return limit/cutoff/payment dates, and the pension returns ' +
-                'fund balances. Get the portalId from bg_list_accounts.',
+                'Full detail for one product, dispatching on its type: savings accounts return balances, ' +
+                'associated debit cards and pending purchases ("Compras en proceso"), credit cards return ' +
+                'limit/cutoff/payment dates, and the pension returns fund balances. ' +
+                'Get the portalId from bg_list_accounts.',
             inputSchema: {
                 portalId: z.number().int().describe('The account portalId from bg_list_accounts.'),
                 includeTransit: z
                     .boolean()
                     .optional()
-                    .default(false)
-                    .describe('Savings only: also fetch transactions accepted but not yet posted.'),
+                    .default(true)
+                    .describe(
+                        'Savings only: include pending purchases — charges the bank has accepted but not yet ' +
+                        'posted to the balance. This is the "Compras en proceso" section of the BG web app. ' +
+                        'On by default; they are part of the normal view of an account.',
+                    ),
             },
         },
         guarded(async ({ portalId, includeTransit }: { portalId: number; includeTransit?: boolean }) => {
@@ -72,10 +77,30 @@ export function registerAccountTools(server: McpServer): void {
                 getSavingsAccountDetail(portalId),
                 getAssociatedAccountCards(portalId).catch(() => null),
             ]);
-            const transit = includeTransit
-                ? await getTransitTransactions(portalId).catch(() => null)
-                : undefined;
-            return jsonResult({ account, detail, associatedCards: cards, transit });
+
+            // A failed fetch and "nothing pending" are not the same answer, and
+            // collapsing them into null is how a pending charge silently goes
+            // missing. Report the failure instead of swallowing it, but don't
+            // let it take the whole account detail down.
+            let pendingPurchases: unknown = undefined;
+            let pendingPurchasesError: string | undefined;
+            if (includeTransit !== false) {
+                try {
+                    pendingPurchases = await getTransitTransactions(portalId);
+                } catch (err) {
+                    pendingPurchasesError = err instanceof Error ? err.message : String(err);
+                }
+            }
+
+            return jsonResult({
+                account,
+                detail,
+                associatedCards: cards,
+                // "Compras en proceso" in the BG web app: accepted, not yet
+                // posted, and therefore not reflected in currentBalance.
+                pendingPurchases,
+                pendingPurchasesError,
+            });
         }),
     );
 }

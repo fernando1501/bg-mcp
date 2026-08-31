@@ -3,7 +3,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { findAccount } from '../api/accounts.js';
+import { findAccount, getTransitTransactions } from '../api/accounts.js';
 import { getCardMovements, normalizeCardMovements } from '../api/cards.js';
 import { clampToDateRange, parseLocalDate } from '../api/normalize.js';
 import { getSavingsMovements, normalizeSavingsMovements } from '../api/savings.js';
@@ -21,7 +21,9 @@ export function registerTransactionTools(server: McpServer): void {
             title: 'List savings account transactions',
             description:
                 'Transactions for one savings account over a date range, with pagination handled internally. ' +
-                'Dates are Panama local time. For credit-card charges use bg_list_card_transactions instead.',
+                'Dates are Panama local time. Also returns pending purchases ("Compras en proceso") — accepted ' +
+                'but not yet posted, and reported separately because they are in neither the totals nor the ' +
+                'balance. For credit-card charges use bg_list_card_transactions instead.',
             inputSchema: {
                 portalId: z.number().int().describe('Savings account portalId from bg_list_accounts.'),
                 fromDate: isoDate,
@@ -32,6 +34,14 @@ export function registerTransactionTools(server: McpServer): void {
                     .positive()
                     .optional()
                     .describe('Cap the number of transactions returned. Omit to return all.'),
+                includePending: z
+                    .boolean()
+                    .optional()
+                    .default(true)
+                    .describe(
+                        'Include pending purchases ("Compras en proceso"). They have no posting date, so they ' +
+                        'are returned in full regardless of the date range.',
+                    ),
             },
         },
         guarded(
@@ -40,11 +50,13 @@ export function registerTransactionTools(server: McpServer): void {
                 fromDate,
                 toDate,
                 limit,
+                includePending,
             }: {
                 portalId: number;
                 fromDate: string;
                 toDate: string;
                 limit?: number;
+                includePending?: boolean;
             }) => {
                 if (fromDate > toDate) {
                     return errorResult('fromDate must be on or before toDate.', 'INVALID_RANGE');
@@ -85,6 +97,19 @@ export function registerTransactionTools(server: McpServer): void {
                     .filter((t) => t.type === 'Gasto')
                     .reduce((s, t) => s + t.amount, 0);
 
+                // Kept out of `transactions` and out of `totals` on purpose: a
+                // pending charge posts later as a real movement, so folding it
+                // in here would count the same purchase twice.
+                let pendingPurchases: unknown = undefined;
+                let pendingPurchasesError: string | undefined;
+                if (includePending !== false) {
+                    try {
+                        pendingPurchases = await getTransitTransactions(portalId);
+                    } catch (err) {
+                        pendingPurchasesError = err instanceof Error ? err.message : String(err);
+                    }
+                }
+
                 return jsonResult({
                     account: { portalId, alias: account.alias, maskedNumber: account.maskedNumber },
                     range: { fromDate, toDate },
@@ -97,6 +122,11 @@ export function registerTransactionTools(server: McpServer): void {
                         net: round(income - expense),
                     },
                     transactions: items,
+                    pendingPurchases,
+                    pendingPurchasesError,
+                    pendingPurchasesNote:
+                        'Compras en proceso: accepted by the bank, not yet posted. Not included in totals, in ' +
+                        'transactions, or in the account balance.',
                 });
             },
         ),
