@@ -1,6 +1,6 @@
 {
   "name": "bg-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Read-only MCP (stdio) server for Banco General's Zona Segura",
   "type": "module",
   "bin": {
