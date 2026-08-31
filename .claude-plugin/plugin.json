@@ -2,7 +2,7 @@
   "name": "bg-mcp",
   "displayName": "Banco General (solo lectura)",
   "description": "Servidor MCP de solo lectura para la Zona Segura de Banco General: cuentas, tarjetas, pension y analitica de gastos.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "author": {
     "name": "Fernando"
   },
