@@ -5,3 +5,4 @@ npm-shrinkwrap.json
 .env
 *.session.json
 .DS_Store
+build/

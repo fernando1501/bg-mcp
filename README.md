@@ -38,15 +38,28 @@ pasa el guard.
 ## Instalación
 
 Es un servidor **stdio**: corre local, lo lanza tu cliente MCP y hablan por
-stdin/stdout. No hay nada que desplegar, ni puerto que abrir, ni repo que clonar
-— basta con decirle al cliente qué comando ejecutar:
+stdin/stdout. No hay nada que desplegar ni puerto que abrir. Elige según tu
+cliente.
+
+### Claude Desktop
+
+Descarga `bg-mcp.mcpb` del [último release][releases] y ábrelo. Claude Desktop
+lo instala como extensión: no hay JSON que editar ni dependencias que instalar,
+el bundle las trae adentro.
+
+[releases]: https://github.com/fernando1501/bg-mcp/releases/latest
+
+### Claude Code
 
 ```bash
 claude mcp add bg --scope user -- npx -y bg-mcp
 ```
 
-`npx` baja el paquete la primera vez, lo cachea y lo ejecuta. En Claude Desktop
-es el mismo comando escrito a mano:
+`npx` baja el paquete la primera vez, lo cachea y lo ejecuta.
+
+### A mano
+
+Cualquier cliente que acepte un comando stdio:
 
 ```json
 {
@@ -59,21 +72,23 @@ es el mismo comando escrito a mano:
 No hay que configurar credenciales en ningún archivo — se piden al momento de
 iniciar sesión.
 
-### El primer arranque baja Chromium
+### Chromium, el único paso que queda manual
 
-El login maneja la UI real de Banco General, así que el paquete depende de
-Playwright y su postinstall descarga Chromium (~150 MB). Si eso ocurre mientras
-el cliente MCP espera el primer handshake, puede pasarse del timeout y marcar el
-servidor como caído. Conviene calentar la caché antes — y de paso quedas
-logueado:
+El login maneja la UI real de Banco General, así que hace falta un Chromium de
+Playwright (~150 MB). No viaja en el `.mcpb` ni lo instala el bundle — vive en
+una caché compartida de la máquina, así que se baja una sola vez:
 
 ```bash
-npx -y bg-mcp login
-claude mcp add bg --scope user -- npx -y bg-mcp
+npx playwright install chromium
 ```
 
-Si el browser igual falta, Playwright lo dice explícitamente al intentar el
-login; se arregla con `npx playwright install chromium`.
+Si te lo saltas, Playwright lo dice explícitamente al intentar el primer login.
+
+Instalando por `npx` hay un matiz extra: el postinstall de Playwright lo
+descarga solo, pero si eso ocurre mientras el cliente MCP espera el primer
+handshake puede pasarse del timeout y marcar el servidor como caído. Correr
+`npx -y bg-mcp login` antes de registrarlo calienta la caché y de paso te deja
+logueado.
 
 ### Instalación global
 
@@ -92,19 +107,19 @@ de como servidor MCP suelto. Son dos comandos en lugar de uno, porque en Claude
 Code todo plugin se instala desde un marketplace:
 
 ```
-/plugin marketplace add TU_USUARIO/bg-mcp
+/plugin marketplace add fernando1501/bg-mcp
 /plugin install bg-mcp@bg-mcp
 ```
 
 El marketplace solo hospeda el índice; el plugin se baja de npm
-(`"source": "npm"`), así que no hay repo que clonar ni `dist/` que versionar. Y
-como npm corre los lifecycle scripts al instalar, aquí Chromium se baja **en la
-instalación** y no en el primer arranque.
+(`"source": "npm"`), así que no hay repo que clonar ni `dist/` que versionar.
+Chromium sigue siendo aparte: Claude Code instala las dependencias del plugin
+con `--ignore-scripts`, o sea el postinstall de Playwright no corre.
 
 ### Desde el código
 
 ```bash
-git clone <este-repo> bg-mcp && cd bg-mcp
+git clone https://github.com/fernando1501/bg-mcp.git && cd bg-mcp
 npm install
 npx playwright install chromium
 npm run build
@@ -207,7 +222,14 @@ Solo una, opcional: `BG_MCP_HOME` cambia dónde vive el archivo de sesión
 npm run build      # compila a dist/
 npm test           # guard + normalización (sin red)
 npm run inspect    # MCP Inspector contra el servidor compilado
+npm run bundle     # arma build/bg-mcp.mcpb para Claude Desktop
 ```
+
+`npm run bundle` monta un directorio aparte con `dist/`, el
+[`manifest.json`](manifest.json) y solo las dependencias de producción, y lo
+empaqueta con el CLI de `@anthropic-ai/mcpb`. Tiene que ser autocontenido porque
+Claude Desktop descomprime el bundle y ejecuta `node dist/index.js` sin instalar
+nada.
 
 ### Publicar
 
@@ -219,8 +241,9 @@ git push --follow-tags
 ```
 
 El workflow ([`.github/workflows/publish.yml`](.github/workflows/publish.yml))
-corre las pruebas, verifica que `package.json`, el manifiesto del plugin y el tag
-digan la misma versión, y recién ahí publica.
+corre las pruebas, verifica que `package.json`, los manifiestos y el tag digan la
+misma versión, publica a npm, y arma el `.mcpb` y lo cuelga del release de
+GitHub.
 
 Necesita un secreto `NPM_TOKEN` en el repo (Settings → Secrets and variables →
 Actions). Que sea un **granular access token** de npm, limitado al paquete
@@ -233,13 +256,15 @@ Para publicar a mano el flujo sigue siendo `npm publish`.
 
 #### Las versiones y el lockfile
 
-Ninguno de los dos manifiestos hereda la versión del otro. El hook `version` de
-npm corre [`scripts/sync-version.mjs`](scripts/sync-version.mjs), que copia la
-versión nueva a [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json) y la
-deja en el mismo commit; [`scripts/check-version.mjs`](scripts/check-version.mjs)
-vuelve a comprobarlo en CI por si alguien editó a mano. La que reporta el
-servidor en [`src/index.ts`](src/index.ts) sigue suelta, pero solo se ve en el
-handshake MCP.
+La versión vive repetida en tres archivos y ninguno la hereda de otro. El hook
+`version` de npm corre [`scripts/sync-version.mjs`](scripts/sync-version.mjs),
+que la copia a [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json) y a
+[`manifest.json`](manifest.json) y los deja en el mismo commit;
+[`scripts/check-version.mjs`](scripts/check-version.mjs) vuelve a comprobarlo en
+CI por si alguien editó a mano. La lista está en
+[`scripts/manifests.mjs`](scripts/manifests.mjs) — un archivo nuevo que repita la
+versión se agrega ahí. La que reporta el servidor en
+[`src/index.ts`](src/index.ts) sigue suelta, pero solo se ve en el handshake MCP.
 
 `prepublishOnly` copia `package-lock.json` a `npm-shrinkwrap.json` y
 `postpublish` lo borra. El rodeo existe porque npm excluye `package-lock.json`

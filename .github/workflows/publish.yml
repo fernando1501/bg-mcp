@@ -12,7 +12,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # para crear el release y subirle el .mcpb
     steps:
       - uses: actions/checkout@v4
 
@@ -37,3 +37,14 @@ jobs:
       - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # El .mcpb es lo que Claude Desktop instala de un clic, así que va colgado
+      # del release para que se pueda descargar sin clonar ni compilar nada.
+      - name: Adjuntar el bundle de Claude Desktop al release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm run bundle
+          gh release create "$GITHUB_REF_NAME" build/bg-mcp.mcpb --generate-notes \
+            || gh release upload "$GITHUB_REF_NAME" build/bg-mcp.mcpb --clobber

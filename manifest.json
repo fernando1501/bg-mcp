@@ -1,0 +1,58 @@
+{
+  "manifest_version": "0.3",
+  "name": "bg-mcp",
+  "display_name": "Banco General (solo lectura)",
+  "version": "0.1.0",
+  "description": "Acceso de solo lectura a tus cuentas, tarjetas y pension de Banco General.",
+  "long_description": "Expone tus productos de Banco General a Claude para preguntar por saldos, movimientos y gastos. El servidor no puede transferir dinero ni pagar nada: cada peticion pasa por una allowlist de rutas de lectura, hay una blocklist de mutacion, y nunca se adjunta el token CSRF que el banco exige para cambiar estado.",
+  "author": {
+    "name": "Fernando"
+  },
+  "homepage": "https://github.com/fernando1501/bg-mcp",
+  "documentation": "https://github.com/fernando1501/bg-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fernando1501/bg-mcp"
+  },
+  "license": "MIT",
+  "keywords": [
+    "banco-general",
+    "banking",
+    "read-only",
+    "panama"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/index.js"
+      ]
+    }
+  },
+  "tools": [
+    { "name": "bg_session_status", "description": "Estado de la sesion guardada" },
+    { "name": "bg_login_start", "description": "Paso 1 del login: devuelve la pregunta de seguridad" },
+    { "name": "bg_login_answer", "description": "Paso 2 del login: respuesta y contrasena" },
+    { "name": "bg_login_otp", "description": "Paso 3 del login: codigo de un solo uso" },
+    { "name": "bg_logout", "description": "Borra la sesion y las credenciales guardadas" },
+    { "name": "bg_list_accounts", "description": "Todos los productos con saldos" },
+    { "name": "bg_get_account", "description": "Detalle de un producto" },
+    { "name": "bg_list_transactions", "description": "Movimientos de una cuenta por rango de fechas" },
+    { "name": "bg_list_card_transactions", "description": "Cargos y pagos de una tarjeta por periodo" },
+    { "name": "bg_get_card_statement", "description": "Estado de cuenta de una tarjeta" },
+    { "name": "bg_get_card_categories", "description": "Desglose por categoria segun el banco" },
+    { "name": "bg_get_pension", "description": "Saldos y estado del fondo de pension" },
+    { "name": "bg_search_transactions", "description": "Busca en todas las cuentas y tarjetas a la vez" },
+    { "name": "bg_spending_summary", "description": "Resumen mensual de ingresos, gastos y neto" }
+  ],
+  "compatibility": {
+    "platforms": [
+      "darwin"
+    ],
+    "runtimes": {
+      "node": ">=20.0.0"
+    }
+  }
+}

@@ -22,7 +22,8 @@
     "login": "node dist/cli/bin.js login",
     "test": "node --test test-dist/test/*.test.js",
     "pretest": "tsc -p tsconfig.test.json",
-    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "bundle": "bash scripts/bundle.sh"
   },
   "engines": {
     "node": ">=20"
