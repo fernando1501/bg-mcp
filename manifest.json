@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "bg-mcp",
   "display_name": "Banco General (solo lectura)",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Acceso de solo lectura a tus cuentas, tarjetas y pension de Banco General.",
   "long_description": "Expone tus productos de Banco General a Claude para preguntar por saldos, movimientos y gastos. El servidor no puede transferir dinero ni pagar nada: cada peticion pasa por una allowlist de rutas de lectura, hay una blocklist de mutacion, y nunca se adjunta el token CSRF que el banco exige para cambiar estado.",
   "author": {
